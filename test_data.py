@@ -3,11 +3,15 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import time
 import torch
 from tokenizer import CustomTokenizer
+from tokenizers import Tokenizer
 from dataloader import get_dataloader
 
 def test_dataloader():
     print("Loading tokenizer...")
-    tokenizer = CustomTokenizer
+    backend = Tokenizer.from_file("./nanogpt_tokenizer/tokenizer.json")
+    tokenizer = CustomTokenizer(backend)
+
+    print(f"Loaded tokenizer with vocab size: {tokenizer.get_vocab_size()}")
 
     print("Initializing DataLoader...")
     loader = get_dataloader(tokenizer, batch_size=4, context_length=128)
@@ -22,7 +26,7 @@ def test_dataloader():
         return
 
     end_time = time.time()
-    print(f"✅ First batch fetched in {end_time - start_time:.2f} seconds.")
+    print(f"First batch fetched in {end_time - start_time:.2f} seconds.")
 
     input_ids = batch["input_ids"]
     

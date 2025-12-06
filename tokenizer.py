@@ -57,6 +57,7 @@ class CustomTokenizer:
         special_tokens = [w.content for w in special_tokens_map.values()]
         return special_tokens
     
+    @property
     def pad_token_id(self):
         id = self.token_to_id("<|pad|>")
         if id is None:
@@ -65,6 +66,9 @@ class CustomTokenizer:
     
     def id_to_token(self, id):
         return self.tokenizer.id_to_token(id)
+    
+    def token_to_id(self, token):
+        return self.tokenizer.token_to_id(token)
     
     def encode_one(self, text, prepend=None, append=None):
         assert isinstance(text, str)
@@ -95,7 +99,9 @@ class CustomTokenizer:
     def __call__(self, *args, **kwargs):
         return self.encode(*args, **kwargs)
 
-    def decode(self, ids):
+    def decode(self, ids, skip_special_tokens=False):
+        if hasattr(ids, "tolist"):
+            ids = ids.tolist()
         return self.tokenizer.decode(ids, skip_special_tokens=False)
 
     def save(self, tokenizer_dir):
