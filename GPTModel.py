@@ -2,6 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from dataclasses import dataclass
+
+if torch.backends.mps.is_available():
+    device = "mps"
+    print("using mps")
+elif torch.cuda.is_available():
+    device = "cuda"
+    print("using cuda")
+else:
+    device = "cpu"
+    print("using cpu")
 
 @dataclass
 class Config:
@@ -13,6 +24,7 @@ class Config:
 
 class ScaleAttention(nn.Module):
     def __init__(self, config, layer_idx):
+        super().__init__()
         self.layer_idx = layer_idx
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -63,6 +75,7 @@ class Block(nn.Module):
     def forward(self, x):
         x = x + self.attn(self.ln(x))
         x = x + self.mlp(self.ln(x))
+        return x
 
 class GPT(nn.Module):
     def __init__(self, config):
@@ -132,7 +145,8 @@ class GPT(nn.Module):
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
         return optimizer
 
-    def generate(self, x, max_new_tokens, temperature=1.0, top_k=None):
+    @torch.inference_mode()
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
             logits, _ = self.forward(idx_cond)
@@ -143,6 +157,6 @@ class GPT(nn.Module):
                 logits[logits < v[:, [-1]]] = -float('Inf')
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
-            idx = torch.cat(idx, idx_next, dim=1)
+            idx = torch.cat((idx, idx_next), dim=1)
         return idx
     

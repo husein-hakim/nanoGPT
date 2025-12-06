@@ -30,8 +30,8 @@ def get_sanity_loader(tokenizer, batch_size=4, context_length=1024):
         text = f.read()
 
     tokens = tokenizer.encode_one(text, prepend='<|bos|>')
-    dataset = torch.tensor(tokens, dtype=torch.float16)
-    print(f'Total Tokens: {data.shape}')
+    dataset = torch.tensor(tokens, dtype=torch.long)
+    print(f'Total Tokens: {dataset.shape}')
     
     class SanityIterator:
         def __init__(self, data, batch_size, context_length):
@@ -48,4 +48,4 @@ def get_sanity_loader(tokenizer, batch_size=4, context_length=1024):
             x = torch.stack([self.data[i : i + self.block_size] for i in ix])
             return {"input_ids": x}
 
-    return SanityIterator(data, batch_size, context_length)
+    return SanityIterator(dataset, batch_size, context_length)
