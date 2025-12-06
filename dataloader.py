@@ -24,3 +24,28 @@ def get_dataloader(tokenizer, batch_size=8, context_length=1024):
 
     dataloader = DataLoader(dataset, batch_size=batch_size)
     return dataloader
+
+def get_sanity_loader(tokenizer, batch_size=4, context_length=1024):
+    with open('input.txt', 'r') as f:
+        text = f.read()
+
+    tokens = tokenizer.encode_one(text, prepend='<|bos|>')
+    dataset = torch.tensor(tokens, dtype=torch.float16)
+    print(f'Total Tokens: {data.shape}')
+    
+    class SanityIterator:
+        def __init__(self, data, batch_size, context_length):
+            self.data = data
+            self.batch_size = batch_size
+            self.block_size = context_length
+            self.n = len(data)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            ix = torch.randint(len(self.data) - self.block_size, (self.batch_size,))
+            x = torch.stack([self.data[i : i + self.block_size] for i in ix])
+            return {"input_ids": x}
+
+    return SanityIterator(data, batch_size, context_length)
