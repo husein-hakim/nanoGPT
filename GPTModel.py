@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 @dataclass
 class Config:
@@ -16,6 +17,10 @@ class ScaleAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.head_dim = self.n_embd // self.n_head
+
+        #scaling for fp16
+        self.scale_factor = 1.0 / math.sqrt(self.head_dim)
+
         self.s_q = nn.Linear(self.n_embd, self.n_head * self.head_dim, bias=False)
         self.s_k = nn.Linear(self.n_embd, self.n_head * self.head_dim, bias=False)
         self.s_v = nn.Linear(self.n_embd, self.n_head * self.head_dim, bias=False)
@@ -28,9 +33,11 @@ class ScaleAttention(nn.Module):
         k = self.s_k(x).view(B, T, self.n_head, self.head_dim)
         v = self.s_v(x).view(B, T, self.n_head, self.head_dim)
 
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        q = q * self.scale_factor
+
+        y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=1.0)
         y = y.transpose(1, 2).contiguous().view(B, T, -1)
-        y = self.c_proj(y)
+        y = self.s_proj(y)
         return y
     
 class MLP(nn.Module):
