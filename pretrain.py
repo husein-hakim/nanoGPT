@@ -45,7 +45,8 @@ tokenizer = CustomTokenizer(backend)
 
 #Dataloader setup
 print('Loading Dataloader')
-train_loader = get_sanity_loader(tokenizer, device_batch_size, block_size)
+train_loader = get_dataloader(tokenizer, device_batch_size, block_size)
+# train_loader = get_sanity_loader(tokenizer, device_batch_size, block_size)
 train_iter = iter(train_loader)
 
 #Initialize model

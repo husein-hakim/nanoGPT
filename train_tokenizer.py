@@ -2,14 +2,14 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import time
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, interleave_datasets
 from tokenizers import Tokenizer as HFTokenizer
 
 # Import your class
 from tokenizer import CustomTokenizer 
 
 # --- Configuration ---
-VOCAB_SIZE = 65536 
+VOCAB_SIZE = 50257 
 DOC_CAP = 10_000  
 MAX_CHARS = 10_000_000
 SAVE_DIR = "./nanogpt_tokenizer"
@@ -18,7 +18,16 @@ def get_training_corpus():
     """
     Streams from HuggingFace, caps document length, and yields text.
     """
-    dataset = load_dataset("HuggingFaceFW/fineweb", name="sample-10BT", split="train", streaming=True)
+    fineweb = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
+    stanford = load_dataset("HuggingFaceTB/cosmopedia", "stanford", split='train', streaming=True)
+    khanacademy = load_dataset("HuggingFaceTB/cosmopedia", "khanacademy", split='train', streaming=True)
+    stories = load_dataset("HuggingFaceTB/cosmopedia", "stories", split='train', streaming=True)
+
+    dataset = interleave_datasets(
+        [fineweb, stanford, khanacademy, stories],
+        probabilities=[0.45, 0.25, 0.25, 0.05],
+        seed=72
+    )
     
     nchars = 0
     print(f"Streaming data (Stop limit: {MAX_CHARS:,} chars)...")
