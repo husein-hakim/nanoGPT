@@ -3,18 +3,27 @@ from datasets import load_dataset, interleave_datasets
 from torch.utils.data import DataLoader
 
 def get_dataloader(tokenizer, batch_size=8, context_length=1024):
+    # fineweb = load_dataset("HuggingFaceFW/fineweb", name="sample-10BT", split="train", streaming=True)
     # dataset = load_dataset("HuggingFaceFW/fineweb", name="CC-MAIN-2024-10", split="train", streaming=True)
-    fineweb = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
+    fineweb_edu = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
     stanford = load_dataset("HuggingFaceTB/cosmopedia", "stanford", split='train', streaming=True)
     khanacademy = load_dataset("HuggingFaceTB/cosmopedia", "khanacademy", split='train', streaming=True)
     stories = load_dataset("HuggingFaceTB/cosmopedia", "stories", split='train', streaming=True)
 
+    # dataset = interleave_datasets(
+    #     [fineweb, fineweb_edu, stanford, khanacademy, stories],
+    #     probabilities=[0.25, 0.40, 0.15, 0.10, 0.10],
+    #     seed=72
+    # )
     dataset = interleave_datasets(
-        [fineweb, stanford, khanacademy, stories],
-        probabilities=[0.45, 0.25, 0.25, 0.05],
+        [fineweb_edu, stanford, khanacademy, stories],
+        probabilities=[0.60, 0.15, 0.15, 0.10],
         seed=72
     )
+    dataset = dataset.filter(lambda x: x['text'] is not None and len(x['text']) > 0)
     dataset = dataset.shuffle(buffer_size=10000, seed=72)
+
+    pad_token_id = tokenizer.encode_special('<|pad|>')
 
     def tokenizer_preprocess(examples):
         print(f"Type of text input: {type(examples['text'])}")
@@ -24,7 +33,7 @@ def get_dataloader(tokenizer, batch_size=8, context_length=1024):
             if len(ids) >= context_length:
                 ids = ids[:context_length]
             elif len(ids) < context_length:
-                ids = ids + [tokenizer.encode_special("<|pad|>")]*(context_length-len(ids))
+                ids = ids + [pad_token_id]*(context_length-len(ids))
             assert len(ids) == context_length, f"Error: Got length {len(ids)}"
             all_input_ids.append(ids)
         return {"input_ids": all_input_ids}
