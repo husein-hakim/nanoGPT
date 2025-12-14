@@ -9,17 +9,24 @@ from dataloader import get_dataloader, get_sanity_loader
 from GPTModel import Config, GPT
 from transformers import get_cosine_schedule_with_warmup
 import time
+from torch.cuda.amp import GradScaler
 
-out_dir = 'pretrain'
+torch.manual_seed(72)
+
+scaler = torch.amp.GradScaler('mps')
+
+out_dir = 'pretrain_batch'
 os.makedirs(out_dir, exist_ok=True)
 
 # total_batch_size = 524288
-total_batch_size = 4096
+# total_batch_size = 4096
+total_batch_size = 32768 ##2**15, ~0.03M in tokens
 device_batch_size = 4
 block_size = 1024
 # max_iters = 5000
-max_iters = 500
-learning_rate = 1e-3
+max_iters = 6000
+learning_rate = 6e-4
+min-lr = learning_rate*0.1
 warmup_steps = 100     
 # eval_interval = 200     
 eval_interval = 50  
@@ -55,8 +62,8 @@ model = GPT(Config)
 model.to(device)
 
 #Setting optimizer and lr
-optimizer = model.configure_optimizers(1e-1, learning_rate, betas=(0.9, 0.95))
-# scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps, max_iters)
+optimizer = model.configure_optimizers(0.0, learning_rate, betas=(0.9, 0.95))
+scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps, max_iters)
 
 def get_batch():
     global train_loader, train_iter
@@ -91,17 +98,26 @@ print(f"Starting training for {max_iters} steps...")
 t0 = time.time()
 
 for epoch in range(max_iters):
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
     loss_accum = 0.0
 
     for step in range(grad_accum_steps):
-        X, y = get_batch()
-        logits, loss = model(X, y)
-        loss = loss / grad_accum_steps
-        loss_accum += loss.item()
-        loss.backward()
+        with torch.amp.autocast(device_type=device, dtype=torch.float16):
+            X, y = get_batch()
+            logits, loss = model(X, y)
+            loss = loss / grad_accum_steps
+            loss_accum += loss.item()
+        scaler.scale(loss).backward()
+        # loss.backward()
 
-    optimizer.step()
+    scaler.unscale_(optimizer)
+    #to prevent NaN
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+    scaler.step(optimizer)
+    scaler.step(scheduler)
+    scaler.update()
+    # optimizer.step()
     # scheduler.step()
 
     t1 = time.time()
@@ -114,15 +130,15 @@ for epoch in range(max_iters):
     if epoch % eval_interval == 0:
         val_loss = estimate_loss()
         model.eval()
-        context = "The king said"
+        context = "Artificial Intelligence is defined as"
         ids = tokenizer.encode_one(context, prepend="<|bos|>")
         x = torch.tensor(ids, dtype=torch.long, device=device).unsqueeze(0)
-        y = model.generate(x, max_new_tokens=50, temperature=1.0, top_k=25)
+        y = model.generate(x, max_new_tokens=50, temperature=0.7, top_k=25)
         print(f"Val: step {epoch} | val_loss {val_loss:.4f}")
         print(f'Ouput: {tokenizer.decode(y[0].tolist())}')
         model.train()
 
-    if epoch > 0 and epoch % save_interval == 0:
+    if epoch > 0 and (epoch % save_interval == 0 or epoch == max_iters-1):
         checkpoint_path = os.path.join(out_dir, f'ckpt_{step}.pt')
         checkpoint = {
             'model': model.state_dict(),
@@ -132,6 +148,6 @@ for epoch in range(max_iters):
             'val_loss': val_loss
         }
         torch.save(checkpoint, checkpoint_path)
-        print(f"💾 Saved checkpoint to {checkpoint_path}")
+        print(f"Saved checkpoint to {checkpoint_path}")
 
 print('Training Complete')
