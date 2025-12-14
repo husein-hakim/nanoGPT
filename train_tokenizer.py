@@ -9,23 +9,26 @@ from tokenizers import Tokenizer as HFTokenizer
 from tokenizer import CustomTokenizer 
 
 # --- Configuration ---
-VOCAB_SIZE = 50257 
+# VOCAB_SIZE = 50257 
+VOCAB_SIZE = 32000 
 DOC_CAP = 10_000  
-MAX_CHARS = 10_000_000
+MAX_CHARS = 500_000_000
 SAVE_DIR = "./nanogpt_tokenizer"
 
 def get_training_corpus():
     """
     Streams from HuggingFace, caps document length, and yields text.
     """
-    fineweb = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
+    fineweb = load_dataset("HuggingFaceFW/fineweb", name="CC-MAIN-2024-10", split="train", streaming=True)
+    # dataset = load_dataset("HuggingFaceFW/fineweb", name="CC-MAIN-2024-10", split="train", streaming=True)
+    fineweb_edu = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
     stanford = load_dataset("HuggingFaceTB/cosmopedia", "stanford", split='train', streaming=True)
     khanacademy = load_dataset("HuggingFaceTB/cosmopedia", "khanacademy", split='train', streaming=True)
     stories = load_dataset("HuggingFaceTB/cosmopedia", "stories", split='train', streaming=True)
 
     dataset = interleave_datasets(
-        [fineweb, stanford, khanacademy, stories],
-        probabilities=[0.45, 0.25, 0.25, 0.05],
+        [fineweb, fineweb_edu, stanford, khanacademy, stories],
+        probabilities=[0.3, 0.35, 0.15, 0.10, 0.10],
         seed=72
     )
     
@@ -87,6 +90,14 @@ def main():
     ids = tokenizer.encode(sample_text)
     print(f"'{sample_text}' -> {ids}")
     print(f"Back to text -> '{tokenizer.decode(ids)}'")
+
+    text = r"\int_{0}^{\infty} x^2 dx = \frac{x^3}{3}"
+    ids = tokenizer.encode(text)
+    tokens = [tokenizer.decode([i]) for i in ids]
+    print(f"Original Length: {len(text)} characters")
+    print(f"Token Count:     {len(ids)} tokens")
+    print("--- Breakdown ---")
+    print(tokens)
 
 if __name__ == "__main__":
     main()
